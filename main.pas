@@ -304,6 +304,15 @@ begin
   UniqueCirclesMarked := 1;
   MarkCurrentCircle();
 
+  MyWriteLn('Gameplay is about to begin.');
+  MyWriteLn('');
+
   { Play the game. }
   PlayGame();
+
+  MyWriteLn('');
+  MyWriteLn('Gameplay is complete!');
+
+  { Close the output file. }
+  CloseFile(OutputFile);
 end.
