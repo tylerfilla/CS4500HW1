@@ -58,11 +58,20 @@ var
   { The output text file. }
   OutputFile: TextFile;
 
+  { The number N. The number of circles in play. }
+  N: integer;
+
+  { The number K. The number of arrows in play. }
+  K: integer;
+
   { Tracker for all allocated circles. }
   AllCircles: array of TCircle;
 
   { A pointer to the current circle. }
   CurrentCircle: TCirclePtr;
+
+  { The unique number of circles marked. }
+  UniqueCirclesMarked: integer;
 
 {*
  * Write output to stdout and the output file.
@@ -87,12 +96,6 @@ procedure InitCirclesFromFile(const Name: string);
 var
   { The opened input file. }
   InputFile: TextFile;
-
-  { The number N. The number of circles. }
-  N: integer;
-
-  { The number K. The number of arrows. }
-  K: integer;
 
   { An iterator index over 1..K. }
   i: integer;
@@ -213,6 +216,62 @@ begin
   Inc(CurrentCircle^.Marks);
 end;
 
+{*
+ * Carry out the game.
+ *}
+procedure PlayGame;
+var
+  { The number of arrows from the current circle. This varies over gameplay. }
+  NumArrows: integer;
+
+  { The last circle we were in. }
+  LastCircle: TCirclePtr;
+
+  { The last randomly-chosen arrow index. }
+  ChosenArrow: integer;
+begin
+  { Core gameplay loop. Stops after all circles have been marked. }
+  while (UniqueCirclesMarked < N) do
+    begin
+      MyWriteLn(Format('Currently in circle %d', [CurrentCircle^.Number]));
+
+      { Count arrows leaving the current circle. }
+      NumArrows := Length(CurrentCircle^.Arrows);
+
+      MyWriteLn(Format('-> %d arrow(s) point away from circle %d', [NumArrows, CurrentCircle^.Number]));
+
+      { If no arrows are available, exit with error. This should not happen if
+        the input describes a strongly-connected digraph, but we handle the
+        error anyway. The user might have made a typo in the input file. }
+      if NumArrows = 0 then
+        begin
+          MyWriteLn(Format('FAIL: Stuck on circle %d: No arrows to follow', [CurrentCircle^.Number]));
+          MyWriteLn('The configured graph is not strongly-connected! Bailing out...');
+          Exit;
+        end;
+
+      { Remember the current circle. }
+      LastCircle := CurrentCircle;
+
+      { Randomly choose the next circle from the available arrows and mark it. }
+      ChosenArrow := Random(NumArrows);
+      CurrentCircle := CurrentCircle^.Arrows[ChosenArrow];
+      MarkCurrentCircle();
+
+      MyWriteLn(Format('Moved marker from circle %d to circle %d via arrow %d', [LastCircle^.Number, CurrentCircle^.Number, ChosenArrow]));
+
+      { If there was no mark on the circle to begin with... }
+      if CurrentCircle^.Marks = 1 then
+        begin
+          { ... then we just hit it for the first time. Increment such count. }
+          Inc(UniqueCirclesMarked);
+
+          MyWriteLn(Format('-> Hit circle %d for the first time', [CurrentCircle^.Number]));
+          MyWriteLn(Format('-> Visited %d unique circles out of %d so far', [UniqueCirclesMarked, N]));
+        end;
+    end;
+end;
+
 { Program entry point. }
 begin
   { The output file. This will be used to produce a transcript of the game. }
@@ -242,5 +301,9 @@ begin
   end;
 
   { Mark the first circle as current. }
+  UniqueCirclesMarked := 1;
   MarkCurrentCircle();
+
+  { Play the game. }
+  PlayGame();
 end.
