@@ -3,10 +3,77 @@
  * February 4, 2019
  * CS 4500-001 :: Intro to Software Profession
  *
- * TODO: Add high-level theory of operation
+ * This program intends to implement the specified game and program behavior: A
+ * strongly-connected digraph is drawn on an imaginary game board, and a marker
+ * is randomly moved along the edges until all nodes have been visited. Each
+ * node counts the number of times it has been visited, and some statistics are
+ * produced after the game completes.
  *
+ * The words "node" and "circle" are used interchangeably. Also, the words
+ * "arrow" and "edge" are used interchangeably.
+ *
+ * FILES: An input file containing a description of a strongly-connected digraph
+ * must be supplied and named 'HW1infile.txt' in the current working directory.
+ * A transcript will be produced in the file 'HW1fillaOutfile.txt'. These files
+ * are considered mission critical, so I/O errors may cause early termination.
+ *
+ * INPUT FILE FORMAT: The input file must conform to a strict textual format:
+ *   - One line containing the integer number N, the number of circles (nodes)
+ *   - One line containing the integer number K, the number of arrows (edges)
+ *   - K lines, one edge (arrow) per line, containing two integer numbers each
+ *       - The first integer number, per line, is the source circle number
+ *       - The second integer number, per line, is the destination circle number
+ *
+ * The program will make a good faith effort to identify issues in formatting;
+ * however, not every pathological input file has been tested.
+ *
+ * GOOD INPUT FILE EXAMPLE:
+ *  4
+ *  5
+ *  1 2
+ *  2 1
+ *  2 3
+ *  3 4
+ *  4 1
+ *
+ * In this example, four circles are described (N=4 on the first line). Five
+ * arrows (K=5 on the second line) are to be provided by the five following
+ * lines. The third line prescribes an arrow from circle 1 to circle 2, the
+ * fourth line prescribes an arrow from circle 2 to circle 1, and so on.
+ * Gameplay can proceed without error.
+ *
+ * BAD INPUT FILE EXAMPLE:
+ *  4
+ *  5
+ *  1 2
+ *  2 1
+ *  2 3
+ *  3 4
+ *
+ * This is an example of a bad input file whose formatting issues will be
+ * identified by the program. As you can see, five arrows are prescribed (K=5 on
+ * the second line), but only four are defined in the lines that follow. The
+ * program will abort on account of premature EOF.
+ *
+ * INTERNALS: The program represents each circle (node) as a record with three
+ * members: Number, Marks, and Arrows. The Number integer associates each circle
+ * with its numeric index (starting with 1, not 0). The Marks integer counts the
+ * total number of checkmarks placed on the circle. The Arrows member is a
+ * dynamic array of pointers to other circles. Each arrow is represented in
+ * memory as a pointer to the destination node stored inside the source node.
+ *
+ * Basic statistics are kept in global variables as the game progresses. These
+ * include tallies on total- and uniquely-marked circles, as well as a counter
+ * for the total number of checkmarks drawn (visits made) overall.
+ *
+ * NOTE: All program output, less unhandled exceptions, is mirrored to the
+ * output file via a custom "MyWriteLn" function that composes two "WriteLn"
+ * calls. I wished to find a redirection system in Pascal similar to C++'s
+ * std::ios::rdbuf(...), but I was unable to. My final solution is less elegant,
+ * but it works.
  *}
 
+{ Enable exceptions if not already. }
 {$I+}
 {$mode objfpc}
 
@@ -73,6 +140,12 @@ var
   { The unique number of circles marked. }
   UniqueCirclesMarked: integer;
 
+  { The total number of marks distributed. }
+  TotalCircleMarks: integer;
+
+  { The maximum number of marks in any one circle. }
+  MaxSingleCircleMarks: integer;
+
 {*
  * Write output to stdout and the output file.
  *
@@ -80,10 +153,10 @@ var
  *}
 procedure MyWriteLn(const Text: string);
 begin
-  { To screen. }
+  { To screen. Output is standard output. }
   WriteLn(Output, Text);
 
-  { To file. }
+  { To file. OutputFile is program-global. }
   WriteLn(OutputFile, Text);
 end;
 
@@ -109,6 +182,8 @@ var
   { A temporary index of an arrow's destination circle. }
   ArrowDest: integer;
 begin
+  MyWriteLn(Format('Initializing from input file %s', [Name]));
+
   { The input file. }
   AssignFile(InputFile, Name);
 
@@ -212,8 +287,17 @@ end;
  *}
 procedure MarkCurrentCircle;
 begin
+  { Increment global mark statistic. }
+  Inc(TotalCircleMarks);
+
   { Increment the mark count on the current circle. }
   Inc(CurrentCircle^.Marks);
+
+  { Update maximum mark count if needed. }
+  if CurrentCircle^.Marks > MaxSingleCircleMarks then
+    MaxSingleCircleMarks := CurrentCircle^.Marks;
+
+  MyWriteLn(Format('Marked circle %d (up to %d mark(s))', [CurrentCircle^.Number, CurrentCircle^.Marks]));
 end;
 
 {*
@@ -233,6 +317,7 @@ begin
   { Core gameplay loop. Stops after all circles have been marked. }
   while (UniqueCirclesMarked < N) do
     begin
+      MyWriteLn('');
       MyWriteLn(Format('Currently in circle %d', [CurrentCircle^.Number]));
 
       { Count arrows leaving the current circle. }
@@ -253,12 +338,14 @@ begin
       { Remember the current circle. }
       LastCircle := CurrentCircle;
 
-      { Randomly choose the next circle from the available arrows and mark it. }
+      { Randomly choose the next circle from the available arrows. }
       ChosenArrow := Random(NumArrows);
       CurrentCircle := CurrentCircle^.Arrows[ChosenArrow];
-      MarkCurrentCircle();
 
       MyWriteLn(Format('Moved marker from circle %d to circle %d via arrow %d', [LastCircle^.Number, CurrentCircle^.Number, ChosenArrow]));
+
+      { Mark the new current circle. }
+      MarkCurrentCircle();
 
       { If there was no mark on the circle to begin with... }
       if CurrentCircle^.Marks = 1 then
@@ -274,6 +361,10 @@ end;
 
 { Program entry point. }
 begin
+  UniqueCirclesMarked := 0;
+  TotalCircleMarks := 0;
+  MaxSingleCircleMarks := 0;
+
   { The output file. This will be used to produce a transcript of the game. }
   AssignFile(OutputFile, C_FILENAME_OUT);
 
@@ -300,18 +391,30 @@ begin
       end;
   end;
 
-  { Mark the first circle as current. }
-  UniqueCirclesMarked := 1;
-  MarkCurrentCircle();
+  { Get a new random sequence. }
+  Randomize();
 
   MyWriteLn('Gameplay is about to begin.');
   MyWriteLn('');
+
+  { Mark the first circle as current. }
+  UniqueCirclesMarked := 1;
+  MarkCurrentCircle();
 
   { Play the game. }
   PlayGame();
 
   MyWriteLn('');
   MyWriteLn('Gameplay is complete!');
+
+  MyWriteLn('');
+  MyWriteLn('~~~ LAST RUN STATISTICS ~~~');
+
+  MyWriteLn(Format('I. There were N=%d circles in play. This was prescribed by the input file.', [N]));
+  MyWriteLn(Format('II. There were K=%d arrow(s) in play. This was prescribed by the input file.', [K]));
+  MyWriteLn(Format('III. In total, %d marks were distributed across all circles. Some circles may have received many marks depending on the graph construction.', [TotalCircleMarks]));
+  MyWriteLn(Format('IV. On average, each circle received %f marks.', [TotalCircleMarks / N]));
+  MyWriteLn(Format('V. In any one circle, the maxmimum number of marks was %d. All circles received at most this many marks during gameplay.', [MaxSingleCircleMarks]));
 
   { Close the output file. }
   CloseFile(OutputFile);
