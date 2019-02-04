@@ -55,13 +55,28 @@ type
   end;
 
 var
+  { The output text file. }
+  OutputFile: TextFile;
+
   { Tracker for all allocated circles. }
   AllCircles: array of TCircle;
 
   { A pointer to the current circle. }
   CurrentCircle: TCirclePtr;
 
-  i: integer; {TODO}
+{*
+ * Write output to stdout and the output file.
+ *
+ * @param Text The output text
+ *}
+procedure MyWriteLn(const Text: string);
+begin
+  { To screen. }
+  WriteLn(Output, Text);
+
+  { To file. }
+  WriteLn(OutputFile, Text);
+end;
 
 {*
  * Set up the circles from the given input file.
@@ -179,7 +194,7 @@ begin
       { Set the first circle as current. }
       CurrentCircle := @AllCircles[0];
     except
-      { Handle miscellaneous I/O errors. }
+      { Rethrow miscellaneous I/O errors under catch-all exception. }
       on E: EInOutError do
         raise EInputFileException.create(Format('Failed to read input file: %s: %s ', [E.ClassName, E.Message]));
     end;
@@ -189,7 +204,9 @@ begin
   end;
 end;
 
-{ Mark the current circle. }
+{*
+ * Mark the current circle.
+ *}
 procedure MarkCurrentCircle;
 begin
   { Increment the mark count on the current circle. }
@@ -198,25 +215,32 @@ end;
 
 { Program entry point. }
 begin
+  { The output file. This will be used to produce a transcript of the game. }
+  AssignFile(OutputFile, C_FILENAME_OUT);
+
+  { Try to open the output file for write (creating it if needed). }
+  try
+    Rewrite(OutputFile);
+  except
+    on E: EInOutError do
+      begin
+        WriteLn(Format('Failed to open output file for write: %s', [E.Message]));
+        Exit;
+      end;
+  end;
+
   { Try to initialize from the input file. }
   try
     InitCirclesFromFile(C_FILENAME_IN);
   except
     on E: EInputFileException do
       begin
-        WriteLn(Format('Input file error: %s', [E.Message]));
+        MyWriteLn(Format('Input file error: %s', [E.Message]));
+        CloseFile(OutputFile);
         Exit;
       end;
   end;
 
-  { Mark the initial current circle. }
+  { Mark the first circle as current. }
   MarkCurrentCircle();
-
-  for i := 0 to Length(AllCircles) - 1 do
-    begin
-      write(AllCircles[i].Number);
-      write(' has ');
-      write(AllCircles[i].Marks);
-      Writeln(' marks');
-    end;
 end.
