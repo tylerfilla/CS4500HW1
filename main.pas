@@ -79,7 +79,7 @@
 
 program main;
 
-uses sysutils;
+uses sysutils, regexpr;
 
 const
   { The name of the input file. }
@@ -173,6 +173,12 @@ var
   { An iterator index over 1..K. }
   i: integer;
 
+  { A temporary arrow string. }
+  ArrowStr: string;
+
+  { A regular expression to arrow details. }
+  ArrowRegExpr: TRegExpr;
+
   { A temporary number of an arrow. }
   ArrowNum: integer;
 
@@ -186,6 +192,10 @@ begin
 
   { The input file. }
   AssignFile(InputFile, Name);
+
+  { Create the regular expression for pulling out arrow details. }
+  ArrowRegExpr := TRegExpr.Create;
+  ArrowRegExpr.Expression := '\d+';
 
   try
     try
@@ -234,29 +244,40 @@ begin
       { Read in K arrow definitions. }
       for ArrowNum := 1 to K do
         begin
-          { Try to read arrow source (circle index). }
+          { Try to read arrow string. }
           if Eof(InputFile) then
-            raise EInputFileException.create(Format('Failed to read source for arrow %d: Premature EOF', [ArrowNum]));
+            raise EInputFileException.create(Format('Failed to read arrow %d: Premature EOF', [ArrowNum]));
           try
-            Read(InputFile, ArrowSrc);
+            ReadLn(InputFile, ArrowStr);
           except
             on E: Exception do
-              raise EInputFileException.create(Format('Failed to read source for arrow %d: %s: %s', [ArrowNum, E.ClassName, E.Message]));
+              raise EInputFileException.create(Format('Failed to read arrow %d: %s: %s', [ArrowNum, E.ClassName, E.Message]));
           end;
+
+          { Pull source and destination indices from line. }
+          if ArrowRegExpr.Exec(ArrowStr) then
+            begin
+              { Pull source. }
+              try
+                ArrowSrc := ArrowRegExpr.Match[0].ToInteger;
+              except
+                on E: Exception do
+                  raise EInputFileException.create(Format('Failed to read arrow %d source: %s: %s', [ArrowNum, E.ClassName, E.Message]));
+              end;
+
+              { Pull destination. }
+              ArrowRegExpr.ExecNext;
+              try
+                ArrowDest := ArrowRegExpr.Match[0].ToInteger;
+              except
+                on E: Exception do
+                  raise EInputFileException.create(Format('Failed to read arrow %d destination: %s: %s', [ArrowNum, E.ClassName, E.Message]));
+              end;
+            end;
 
           { Check range of arrow source index (from 1 to N). }
           if (ArrowSrc < 1) or (ArrowSrc > N) then
             raise EInputFileException.create(Format('Source index for arrow %d is out of range: %d', [ArrowNum, ArrowSrc]));
-
-          { Try to read arrow destination (circle index). }
-          if Eof(InputFile) then
-            raise EInputFileException.create(Format('Failed to read destination for arrow %d: Premature EOF', [ArrowNum]));
-          try
-            Read(InputFile, ArrowDest);
-          except
-            on E: Exception do
-              raise EInputFileException.create(Format('Failed to read destination for arrow %d: %s: %s', [ArrowNum, E.ClassName, E.Message]));
-          end;
 
           { Check range of arrow destination index (from 1 to N). }
           if (ArrowDest < 1) or (ArrowDest > N) then
@@ -279,6 +300,9 @@ begin
   finally
     { Close the input file. }
     CloseFile(InputFile);
+
+    { Free arrow regular expression. }
+    ArrowRegExpr.Free;
   end;
 end;
 
