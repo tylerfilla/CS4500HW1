@@ -227,8 +227,8 @@ begin
           raise EInputFileException.create(Format('Failed to read K: %s: %s', [E.ClassName, E.Message]));
       end;
 
-      { Check range of K (from 0 to inf). }
-      if (K < 0) then
+      { Check range of K (from 2 to 100). }
+      if (K < 2) or (K > 100) then
         raise EInputFileException.create(Format('K is out of range: %d', [K]));
 
       { Read in K arrow definitions. }
